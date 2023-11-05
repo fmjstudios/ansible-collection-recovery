@@ -1,0 +1,97 @@
+---
+- name: install | Create GoBackup system group and users
+  block:
+    - name: Create GoBackup system group
+      ansible.builtin.group:
+        name: "{{ gobackup_system_group }}"
+        state: present
+        system: true
+
+    - name: install | Create GoBackup system user
+      ansible.builtin.user:
+        name: "{{ gobackup_system_user }}"
+        group: "{{ gobackup_system_group }}"
+        append: true
+        shell: /usr/sbin/nologin
+        system: true
+        create_home: false
+      when: gobackup_system_user != "root"
+
+# TODO(FMJdev): Maybe remove this - seems obsolete
+- name: install | Ensure '/usr/local/bin' exists with correct permissions
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: install | Create GoBackup configuration directories
+  ansible.builtin.file:
+    path: "{{ __path__ }}"
+    state: directory
+    owner: root
+    group: "{{ gobackup_system_group }}"
+    mode: 0755
+  loop:
+    - "{{ gobackup_config_path }}"
+
+- name: install | Create GoBackup installation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ gobackup_system_user }}"
+    group: "{{ gobackup_system_group }}"
+    mode: 0755
+  with_items:
+    - "{{ gobackup_install_dir }}"
+    - "{{ gobackup_install_dir }}/{{ gobackup_version }}"
+  when:
+    - gobackup_install_skip
+
+- name: install | Check for an existing GoBackup binary
+  ansible.builtin.stat:
+    path: "{{ gobackup_install_dir }}/{{ gobackup_version }}/gobackup-linux-{{ _go_arch }}"
+  register: gobackup_binary
+
+- name: install | Download GoBackup release archive from GitHub releases page
+  ansible.builtin.get_url:
+    url: "{{ gobackup_dist_url }}"
+    dest: "{{ gobackup_install_tmp_dir }}/{{ gobackup_version }}_gobackup-linux-{{ go_arch }}.tar.gz"
+    force: true
+    checksum: "{{ gobackup_dist_custom_checksum if gobackup_dist_custom_checksum else 'sha256:' + __gobackup_checksum }}"
+  when:
+    - not gobackup_binary.stat.exists
+    - gobackup_install_skip
+
+- name: "install | Unpack GoBackup release binary into {{ promtail_install_dir }}"
+  ignore_errors: "{{ ansible_check_mode }}"
+  ansible.builtin.unarchive:
+    src: "{{ gobackup_install_tmp_dir }}/{{ gobackup_version }}_gobackup-linux-{{ go_arch }}.tar.gz"
+    dest: "{{ gobackup_install_dir }}/{{ gobackup_version }}"
+    creates: "{{ gobackup_install_dir }}/{{ gobackup_version }}/gobackup-linux-{{ go_arch }}"
+    mode: 0755
+    remote_src: true
+  when:
+    - gobackup_install_skip
+
+- name: Create symlink to latest version
+  notify:
+    - Restart gobackup
+  ignore_errors: "{{ ansible_check_mode }}"
+  file:
+    state: link
+    src: "{{ gobackup_install_dir }}/{{ gobackup_version }}/gobackup-linux-{{ go_arch }}"
+    dest: "{{ gobackup_install_bin_dir }}/gobackup"
+    mode: 0755
+  when:
+    - gobackup_install_skip
+
+- name: Install complimentary packages to enhance GoBackup
+  ansible.builtin.apt:
+    name: __dep__
+    state: present
+    update_cache: true
+  loop: "{{ gobackup_install_deps }}"
+  loop_control:
+    loop_var: __dep__

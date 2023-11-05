@@ -1,0 +1,9 @@
+---
+- name: Restart GoBackup systemd service
+  listen: "restart gobackup"
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: "{{ gobackup_systemd_service }}"
+    state: restarted
+  when:
+    - not ansible_check_mode

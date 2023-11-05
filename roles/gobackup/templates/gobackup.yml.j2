@@ -1,0 +1,13 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+{{ ansible_managed | comment }}
+
+
+# GoBackup configuration file
+# reference: https://gobackup.github.io/configuration
+# example: https://github.com/gobackup/gobackup/blob/main/gobackup_test.yml
+
+web:
+ {{ gobackup_config_web | to_nice_yaml(indent=2) | indent(2, False) }}
+
+models:
+ {{ gobackup_config_models | to_nice_yaml(indent=2) | indent(2, False) }}

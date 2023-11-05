@@ -1,0 +1,59 @@
+---
+- name: preflight | Assert usage of systemd as an init system
+  ansible.builtin.assert:
+    that: ansible_service_mgr == 'systemd'
+    msg: "This role only works with systemd"
+
+- name: preflight | Install package fact dependencies
+  become: true
+  ansible.builtin.package:
+    name: "{{ _pkg_fact_req }}"
+    state: present
+  when: (_pkg_fact_req)
+  vars:
+    _pkg_fact_req: "{% if (ansible_pkg_mgr == 'apt') %}\
+      {{ ('python-apt' if ansible_python_version is version('3', '<') else 'python3-apt') }}
+      {% else %}\
+      {% endif %}"
+
+- name: preflight | Gather package facts
+  ansible.builtin.package_facts:
+  when: "not 'packages' in ansible_facts"
+
+- name: preflight | Assert that the GoBackup web configuration is correct if setup
+  ansible.builtin.assert:
+    that:
+      - gobackup_config_web.host is defined
+      - gobackup_config_web.host is string
+      - gobackup_config_web.port is defined
+      - gobackup_config_web.port is number
+      - gobackup_config_web.port > 0 < 65535
+      - gobackup_config_web.username is defined
+      - gobackup_config_web.username is string
+      - gobackup_config_web.password is defined
+      - gobackup_config_web.password is string
+  when:
+    - gobackup_config_web != {}
+
+- name: Ensure the system has the necessary dependencies to extract release archives
+  ansible.builtin.apt:
+    name: "{{ __pkg__ }}"
+    state: present
+    update_cache: true
+  loop: "{{ _deps }}"
+  loop_control:
+    loop_var: __pkg__
+
+- name: Retrieve correct checksums for secure GoBackup release archive downloads
+  block:
+    - name: Retrieve the checksum list from GitHub releases page
+      set_fact:
+        _raw_checksums: "{{ lookup('url', 'https://github.com/gobackup/gobackup/releases/download/v' + gobackup_version + '/gobackup_' + gobackup_version + '_checksums.txt', wantlist=True) | list }}"
+      run_once: True
+
+    - name: "Get the correct checksum for {{ _go_arch }} architecture"
+      set_fact:
+        __gobackup_checksum: "{{ item.split(' ')[0] }}"
+      with_items: "{{ _raw_checksums }}"
+      when:
+        - "('gobackup-linux-' + go_arch + '.tar.gz') in item"

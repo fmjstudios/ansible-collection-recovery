@@ -1,0 +1,17 @@
+{{ ansible_managed | comment }}
+
+
+[Unit]
+Description={{ gobackup_systemd_service }}
+After=network-online.target
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutSec=5
+User={{ gobackup_system_user }}
+Group={{ gobackup_system_group }}
+ExecStart={{ gobackup_install_bin_dir }}/gobackup
+
+[Install]
+WantedBy=multi-user.target

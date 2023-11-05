@@ -1,0 +1,66 @@
+---
+gobackup_version: 2.4.0
+gobackup_dist_url:
+  "https://github.com/{{ __gobackup_repository }}/releases/download/v{{ gobackup_version }}\
+  /promtail-linux-{{ _go_arch }}.zip"
+gobackup_dist_custom_checksum: ""
+
+gobackup_config_path: /etc
+gobackup_config_file_path: "{{ gobackup_config_path }}/gobackup.yml"
+
+gobackup_system_group: gobackup
+gobackup_system_user: "{{ gobackup_system_group }}"
+
+gobackup_install_skip: false
+gobackup_install_deps:
+  - pigz
+gobackup_install_dir: /opt/gobackup
+gobackup_install_tmp_dir: /tmp/gobackup
+gobackup_install_bin_dir: /usr/local/bin
+
+gobackup_systemd_service: gobackup
+
+gobackup_config_web:
+  host: backups.delta4x4.net
+  port: 2703
+  username: mg-gobackup
+  password: testingpassword
+
+gobackup_config_models:
+  - name: tank1_mysql-backups
+    config:
+      schedule:
+        cron: "5 4 * * *"
+      compress_with:
+        type: tgz
+      split_with:
+        chunk_size: 1g
+      default_storage: s3
+      storages:
+        s3:
+          type: s3
+          bucket: gobackup-test
+          region: ap-southeast-1
+          path: backups
+          access_key_id: <CHANGE-ME>
+          secret_access_key: <CHANGE-ME>
+      archive:
+        includes:
+          - /var/lib/docker/volumes
+        excludes:
+          - /var/lib/docker/images
+      databases:
+        tank1:
+          type: mysql
+          host: localhost
+          port: 3306
+          database: my_app_production
+          username: root
+          password: root
+          tables:
+            - users
+            - posts
+          exclude_tables:
+            - logs
+            - logs_1
+          args: --single-transaction --quick
